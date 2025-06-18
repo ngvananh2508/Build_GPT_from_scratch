@@ -197,5 +197,3 @@ for iter in range(max_iters):
 
 context = torch.zeros((1,1), dtype=torch.long, device=device)
 print(decode(m.generate(context, max_new_tokens=500)[0].tolist()))
-print(decode(m.generate(context, max_new_tokens=500)[0].tolist()))
-
