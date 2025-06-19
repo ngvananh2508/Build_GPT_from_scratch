@@ -3,15 +3,15 @@ import torch.nn as nn
 from torch.nn import functional as F
 
 # hyperparameters
-batch_size = 64 # number of sequences will be processed in parallel
-block_size = 256 # context length for predictions
+batch_size = 32 # number of sequences will be processed in parallel
+block_size = 8 # context length for predictions
 max_iters = 5000
 eval_interval = 500
-learning_rate = 3e-4
+learning_rate = 1e-3
 device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
-n_embd = 384
+n_embd = 64
 eval_iters = 200
-n_head = 6
+n_head = 8
 n_layer = 6
 dropout = 0.2
 
@@ -63,23 +63,23 @@ class Head(nn.Module):
 
     def __init__(self, head_size): #head-size: dimension of q,k,v matrices
         super().__init__()
-        self.key = nn.Linear(n_embd, head_size, bias=False)
+        self.key = nn.Linear(n_embd, head_size, bias=False) # (C, head_size)
         self.query = nn.Linear(n_embd, head_size, bias=False)
         self.value = nn.Linear(n_embd, head_size, bias=False)
         self.register_buffer('tril', torch.tril(torch.ones((block_size, block_size))))
         self.dropout = nn.Dropout(dropout)
 
-    def forward(self, x):
+    def forward(self, x): # forward pass
         B,T,C = x.shape
-        k = self.key(x) #(B,T,head_side)
+        k = self.key(x) #(B,T,head_size)
         q = self.query(x)
         # compute attention scores ("affinities")
-        wei = q@k.transpose(-2,-1) * C**-0.5 # (B,T,head_size) -> (B,head_size,T), **-0.5 for stable variance.
+        wei = q@k.transpose(-2,-1) * C**-0.5 # (B,T,head_size) -> (B,head_size,T), *C**-0.5 for stable variance (B,T,T)
         wei = wei.masked_fill(self.tril[:T, :T]==0, float('-inf'))
-        wei = F.softmax(wei, dim=-1)
+        wei = F.softmax(wei, dim=-1) #(B,T,T)
         wei = self.dropout(wei)
         # perform the weighted aggregation of the values
-        v = self.value(x)
+        v = self.value(x) # (B,T,head_size)
         out = wei @ v #(B,T,head_size)
         return out
     
@@ -88,11 +88,11 @@ class MultiHeadAttention(nn.Module):
 
     def __init__(self, num_heads, head_size):
         super().__init__()
-        self.heads = nn.ModuleList([Head(head_size) for _ in range(num_heads)])
-        self.proj = nn.Linear(n_embd, n_embd)
+        self.heads = nn.ModuleList([Head(head_size) for _ in range(num_heads)]) # list of heads
+        self.proj = nn.Linear(n_embd, n_embd) # (C,C)
     def forward(self, x):
-        out = torch.cat([h(x) for h in self.heads], dim=-1)
-        out = self.proj(out)
+        out = torch.cat([h(x) for h in self.heads], dim=-1) # (B,T,head_size*num_heads)
+        out = self.proj(out) # (B,T,C)
         return out
 
 class FeedForward(nn.Module):
@@ -101,10 +101,10 @@ class FeedForward(nn.Module):
     def __init__(self, n_embd):
         super().__init__()
         self.net = nn.Sequential(
-            nn.Linear(n_embd, 4 * n_embd),
+            nn.Linear(n_embd, 4 * n_embd), # (C, 4*C)
             nn.ReLU(),
             nn.Linear(4 * n_embd, n_embd),
-            nn.Dropout(dropout),
+            nn.Dropout(dropout), # drop the elements and features with probability dropout
         )
     
     def forward(self, x):
@@ -115,7 +115,7 @@ class Block(nn.Module):
     def __init__(self, n_embd, n_head):
         super().__init__()
         head_size = n_embd // n_head
-        self.sa = MultiHeadAttention(n_head, head_size)
+        self.sa = MultiHeadAttention(n_head, head_size) # (B,T,C)
         self.ffwd = FeedForward(n_embd)
         self.ln1 = nn.LayerNorm(n_embd)
         self.ln2 = nn.LayerNorm(n_embd)
@@ -123,7 +123,7 @@ class Block(nn.Module):
     def forward(self, x):
         x = x + self.sa(self.ln1(x))
         x = x + self.ffwd(self.ln2(x))
-        return x
+        return x # (B,T,C)
     
 class GPTLanguageModel(nn.Module):
 
