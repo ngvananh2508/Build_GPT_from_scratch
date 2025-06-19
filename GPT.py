@@ -3,15 +3,15 @@ import torch.nn as nn
 from torch.nn import functional as F
 
 # hyperparameters
-batch_size = 32 # number of sequences will be processed in parallel
-block_size = 8 # context length for predictions
+batch_size = 64 # number of sequences will be processed in parallel
+block_size = 256 # context length for predictions
 max_iters = 5000
 eval_interval = 500
-learning_rate = 1e-3
+learning_rate = 3e-4 # learning rate for the optimizer
 device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
-n_embd = 64
+n_embd = 384
 eval_iters = 200
-n_head = 8
+n_head = 6 # number of attention heads
 n_layer = 6
 dropout = 0.2
 
